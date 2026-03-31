@@ -21,7 +21,7 @@ A lightweight, embeddable live chat widget for the [HeySupport](https://heysmmpr
 Add one line to your website:
 
 ```html
-<script src="https://cdn.jsdelivr.net/gh/heysmmprovider/heysupport@latest/dist/heysupport.min.js" data-server="https://your-socket-server.com"></script>
+<script src="https://cdn.jsdelivr.net/gh/heysmmprovider/heysupport-widget@latest/dist/heysupport.min.js" data-server="https://your-socket-server.com"></script>
 ```
 
 That's it. The chat bubble appears in the bottom-right corner.
@@ -42,7 +42,7 @@ Customize the widget with `data-` attributes on the script tag:
 
 ```html
 <script
-  src="https://cdn.jsdelivr.net/gh/heysmmprovider/heysupport@latest/dist/heysupport.min.js"
+  src="https://cdn.jsdelivr.net/gh/heysmmprovider/heysupport-widget@latest/dist/heysupport.min.js"
   data-server="https://socket.yoursite.com"
   data-color="#7c3aed"
   data-position="left"
@@ -83,8 +83,8 @@ No build tools required for development. Open the demo page directly:
 
 ```bash
 # Clone the repo
-git clone https://github.com/heysmmprovider/heysupport.git
-cd heysupport
+git clone https://github.com/heysmmprovider/heysupport-widget.git
+cd heysupport-widget
 
 # Open the demo page in your browser
 open demo/index.html

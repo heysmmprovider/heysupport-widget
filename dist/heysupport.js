@@ -2,21 +2,17 @@
 (function () {
   "use strict";
 
-  // ── Socket.IO Client (v4.7.5 minimal standalone build) ──────────────
-  // We load socket.io-client from CDN at runtime to keep the widget small
-  // and avoid bundling issues.
-
   var SCRIPT_TAG =
     document.currentScript ||
     document.querySelector('script[data-server]');
 
   var CONFIG = {
     server: SCRIPT_TAG && SCRIPT_TAG.getAttribute("data-server"),
-    color: (SCRIPT_TAG && SCRIPT_TAG.getAttribute("data-color")) || "#2563eb",
+    color: (SCRIPT_TAG && SCRIPT_TAG.getAttribute("data-color")) || "#1972f5",
     position: (SCRIPT_TAG && SCRIPT_TAG.getAttribute("data-position")) || "right",
     welcome:
       (SCRIPT_TAG && SCRIPT_TAG.getAttribute("data-welcome")) ||
-      "Hi there! How can we help you today?",
+      "Hi! How can we help you?",
     title:
       (SCRIPT_TAG && SCRIPT_TAG.getAttribute("data-title")) || "HeySupport",
   };
@@ -49,374 +45,104 @@
 
   // ── Styles ──────────────────────────────────────────────────────────
   function injectStyles() {
-    var css = `
-      /* Reset */
-      #heysupport-widget, #heysupport-widget * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        line-height: 1.5;
-      }
+    var pos = CONFIG.position === "left" ? "left" : "right";
+    var R = "#hs-root"; // prefix for specificity
+    var C = CONFIG.color;
+    var css = [
+      // Reset — only box-sizing, NOT margin/padding
+      R + "," + R + " *," + R + " *::before," + R + " *::after{box-sizing:border-box;}",
+      R + "{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-size:14px;line-height:1.4;color:#1b2a4e;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}",
 
-      /* Bubble */
-      #heysupport-bubble {
-        position: fixed;
-        bottom: 20px;
-        ${CONFIG.position === "left" ? "left: 20px;" : "right: 20px;"}
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        background: ${CONFIG.color};
-        color: #fff;
-        border: none;
-        cursor: pointer;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.18);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2147483647;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      #heysupport-bubble:hover {
-        transform: scale(1.08);
-        box-shadow: 0 6px 24px rgba(0,0,0,0.24);
-      }
-      #heysupport-bubble svg {
-        width: 28px;
-        height: 28px;
-        fill: #fff;
-      }
-      #heysupport-bubble .hs-close-icon {
-        display: none;
-      }
-      #heysupport-bubble.hs-open .hs-chat-icon {
-        display: none;
-      }
-      #heysupport-bubble.hs-open .hs-close-icon {
-        display: block;
-      }
+      // Launcher bubble
+      R + " #hs-launcher{position:fixed;bottom:24px;" + pos + ":24px;z-index:2147483647;width:56px;height:56px;border-radius:50%;background:" + C + ";border:none;cursor:pointer;box-shadow:0 2px 16px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;transition:transform .15s ease,box-shadow .15s ease;outline:none;padding:0;margin:0;}",
+      R + " #hs-launcher:hover{transform:scale(1.05);box-shadow:0 4px 20px rgba(0,0,0,.3);}",
+      R + " #hs-launcher:active{transform:scale(.97);}",
+      R + " #hs-launcher svg{width:24px;height:24px;transition:opacity .15s ease,transform .2s ease;fill:none;}",
+      R + " #hs-launcher .hs-icon-chat{opacity:1;transform:rotate(0deg);}",
+      R + " #hs-launcher .hs-icon-close{position:absolute;opacity:0;transform:rotate(-60deg);}",
+      R + " #hs-launcher.hs-active .hs-icon-chat{opacity:0;transform:rotate(60deg);}",
+      R + " #hs-launcher.hs-active .hs-icon-close{opacity:1;transform:rotate(0deg);}",
 
-      /* Unread badge */
-      #heysupport-badge {
-        position: absolute;
-        top: -4px;
-        right: -4px;
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background: #ef4444;
-        color: #fff;
-        font-size: 11px;
-        font-weight: 700;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        border: 2px solid #fff;
-      }
-      #heysupport-badge.hs-show {
-        display: flex;
-      }
+      // Badge
+      R + " #hs-badge{position:absolute;top:-2px;" + pos + ":-2px;min-width:18px;height:18px;border-radius:9px;background:#e74c3c;color:#fff;font-size:11px;font-weight:600;display:none;align-items:center;justify-content:center;padding:0 5px;border:2px solid #fff;line-height:1;margin:0;}",
+      R + " #hs-badge.hs-visible{display:flex;}",
 
-      /* Chat window */
-      #heysupport-window {
-        position: fixed;
-        bottom: 92px;
-        ${CONFIG.position === "left" ? "left: 20px;" : "right: 20px;"}
-        width: 380px;
-        max-width: calc(100vw - 40px);
-        height: 520px;
-        max-height: calc(100vh - 120px);
-        background: #fff;
-        border-radius: 16px;
-        box-shadow: 0 8px 40px rgba(0,0,0,0.16);
-        z-index: 2147483646;
-        display: none;
-        flex-direction: column;
-        overflow: hidden;
-        animation: heysupport-slide-up 0.25s ease-out;
-      }
-      #heysupport-window.hs-open {
-        display: flex;
-      }
+      // Chat window
+      R + " #hs-chat{position:fixed;bottom:92px;" + pos + ":24px;z-index:2147483646;width:376px;height:min(560px,calc(100vh - 120px));background:#fff;border-radius:12px;box-shadow:0 5px 40px rgba(0,0,0,.16);display:none;flex-direction:column;overflow:hidden;opacity:0;transform:translateY(8px) scale(.98);transition:opacity .2s ease,transform .2s ease;margin:0;padding:0;}",
+      R + " #hs-chat.hs-visible{display:flex;}",
+      R + " #hs-chat.hs-shown{opacity:1;transform:translateY(0) scale(1);}",
 
-      @keyframes heysupport-slide-up {
-        from { opacity: 0; transform: translateY(16px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
+      // Header
+      R + " .hs-head{background:" + C + ";padding:20px 24px 18px;flex-shrink:0;position:relative;margin:0;}",
+      R + " .hs-head-title{color:#fff;font-size:16px;font-weight:600;letter-spacing:-.2px;margin:0;padding:0;}",
+      R + " .hs-head-sub{color:rgba(255,255,255,.8);font-size:12.5px;margin:3px 0 0;padding:0;}",
 
-      /* Header */
-      .hs-header {
-        background: ${CONFIG.color};
-        color: #fff;
-        padding: 16px 20px;
-        flex-shrink: 0;
-      }
-      .hs-header-title {
-        font-size: 17px;
-        font-weight: 700;
-      }
-      .hs-header-subtitle {
-        font-size: 13px;
-        opacity: 0.85;
-        margin-top: 2px;
-      }
+      // Status bar
+      R + " .hs-bar{padding:8px 16px;font-size:12px;text-align:center;background:#f7f8fc;color:#6b7a99;border-bottom:1px solid #eef0f6;flex-shrink:0;display:none;align-items:center;justify-content:center;gap:7px;margin:0;}",
+      R + " .hs-bar.hs-visible{display:flex;}",
+      R + " .hs-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin:0;padding:0;}",
+      R + " .hs-dot-waiting{background:#f0ad4e;animation:hs-pulse 1.4s ease-in-out infinite;}",
+      R + " .hs-dot-online{background:#27ae60;}",
+      R + " .hs-dot-off{background:#95a5b8;}",
+      "@keyframes hs-pulse{0%,100%{opacity:1;}50%{opacity:.35;}}",
 
-      /* Status bar */
-      .hs-status {
-        padding: 8px 20px;
-        font-size: 12px;
-        text-align: center;
-        background: #f8fafc;
-        color: #64748b;
-        border-bottom: 1px solid #e2e8f0;
-        flex-shrink: 0;
-        display: none;
-      }
-      .hs-status.hs-show {
-        display: block;
-      }
-      .hs-status-dot {
-        display: inline-block;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        margin-right: 6px;
-        vertical-align: middle;
-      }
-      .hs-status-dot.hs-waiting {
-        background: #f59e0b;
-        animation: heysupport-pulse 1.5s ease-in-out infinite;
-      }
-      .hs-status-dot.hs-connected {
-        background: #22c55e;
-      }
-      .hs-status-dot.hs-closed {
-        background: #94a3b8;
-      }
+      // Body
+      R + " .hs-body{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;margin:0;padding:0;}",
 
-      @keyframes heysupport-pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.4; }
-      }
+      // Pre-chat form
+      R + " .hs-prechat{display:flex;flex-direction:column;padding:28px 24px 20px;margin:0;}",
+      R + " .hs-prechat-hi{font-size:15px;color:#4a5568;margin:0 0 24px;padding:0;line-height:1.5;}",
+      R + " .hs-prechat-group{margin:0 0 14px;padding:0;}",
+      R + " .hs-prechat-label{display:block;font-size:11px;font-weight:600;color:#6b7a99;margin:0 0 6px;padding:0;text-transform:uppercase;letter-spacing:.5px;}",
+      R + " .hs-prechat-input{width:100%;padding:10px 14px;border:1.5px solid #dce1eb;border-radius:8px;font-size:14px;outline:none;font-family:inherit;color:#1b2a4e;background:#fff;transition:border-color .15s,box-shadow .15s;margin:0;height:auto;line-height:1.4;}",
+      R + " .hs-prechat-input:focus{border-color:" + C + ";box-shadow:0 0 0 3px " + C + "1a;}",
+      R + " .hs-prechat-input::placeholder{color:#a0aec0;}",
+      R + " .hs-prechat-input.hs-err{border-color:#e74c3c;}",
+      R + " .hs-prechat-btn{width:100%;margin:8px 0 0;padding:12px 20px;border-radius:8px;border:none;background:" + C + ";color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;transition:filter .15s,transform .1s;letter-spacing:-.1px;line-height:1;}",
+      R + " .hs-prechat-btn:hover{filter:brightness(1.06);}",
+      R + " .hs-prechat-btn:active{transform:scale(.98);}",
 
-      /* Messages area */
-      .hs-messages {
-        flex: 1;
-        overflow-y: auto;
-        padding: 16px 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .hs-messages::-webkit-scrollbar {
-        width: 4px;
-      }
-      .hs-messages::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
-      }
+      // Messages
+      R + " .hs-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:4px;scroll-behavior:smooth;margin:0;}",
+      R + " .hs-msgs::-webkit-scrollbar{width:3px;}",
+      R + " .hs-msgs::-webkit-scrollbar-track{background:transparent;}",
+      R + " .hs-msgs::-webkit-scrollbar-thumb{background:#d0d5dd;border-radius:3px;}",
 
-      /* Message bubble */
-      .hs-msg {
-        max-width: 80%;
-        padding: 10px 14px;
-        border-radius: 16px;
-        font-size: 14px;
-        word-wrap: break-word;
-        white-space: pre-wrap;
-      }
-      .hs-msg-visitor {
-        align-self: flex-end;
-        background: ${CONFIG.color};
-        color: #fff;
-        border-bottom-right-radius: 4px;
-      }
-      .hs-msg-operator {
-        align-self: flex-start;
-        background: #f1f5f9;
-        color: #1e293b;
-        border-bottom-left-radius: 4px;
-      }
-      .hs-msg-system {
-        align-self: center;
-        background: none;
-        color: #94a3b8;
-        font-size: 12px;
-        text-align: center;
-        padding: 4px 0;
-      }
-      .hs-msg-sender {
-        font-size: 11px;
-        color: #64748b;
-        margin-bottom: 2px;
-      }
-      .hs-msg-time {
-        font-size: 10px;
-        opacity: 0.7;
-        margin-top: 4px;
-        text-align: right;
-      }
+      // Message bubbles
+      R + " .hs-m{max-width:78%;padding:9px 14px;border-radius:18px;font-size:13.5px;word-wrap:break-word;white-space:pre-wrap;line-height:1.45;margin:0;}",
+      R + " .hs-m-v{align-self:flex-end;background:" + C + ";color:#fff;border-bottom-right-radius:6px;}",
+      R + " .hs-m-o{align-self:flex-start;background:#f0f2f7;color:#1b2a4e;border-bottom-left-radius:6px;}",
+      R + " .hs-m-s{align-self:center;background:none;color:#95a5b8;font-size:11.5px;text-align:center;padding:6px 0;}",
+      R + " .hs-m-name{font-size:11px;font-weight:600;color:#6b7a99;margin:0 0 2px;padding:0;}",
+      R + " .hs-m-time{font-size:10px;opacity:.55;margin:3px 0 0;padding:0;}",
 
-      /* Typing indicator */
-      .hs-typing {
-        display: none;
-        align-self: flex-start;
-        padding: 10px 14px;
-        background: #f1f5f9;
-        border-radius: 16px;
-        border-bottom-left-radius: 4px;
-      }
-      .hs-typing.hs-show {
-        display: flex;
-        gap: 4px;
-        align-items: center;
-      }
-      .hs-typing-dot {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: #94a3b8;
-        animation: heysupport-typing 1.4s ease-in-out infinite;
-      }
-      .hs-typing-dot:nth-child(2) { animation-delay: 0.2s; }
-      .hs-typing-dot:nth-child(3) { animation-delay: 0.4s; }
+      // Typing indicator
+      R + " .hs-typing{display:none;align-self:flex-start;padding:10px 16px;background:#f0f2f7;border-radius:18px;border-bottom-left-radius:6px;gap:3px;align-items:center;margin:0;}",
+      R + " .hs-typing.hs-visible{display:flex;}",
+      R + " .hs-typing i{display:block;width:5px;height:5px;border-radius:50%;background:#95a5b8;animation:hs-bounce 1.2s ease-in-out infinite;margin:0;padding:0;}",
+      R + " .hs-typing i:nth-child(2){animation-delay:.15s;}",
+      R + " .hs-typing i:nth-child(3){animation-delay:.3s;}",
+      "@keyframes hs-bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-3px);}}",
 
-      @keyframes heysupport-typing {
-        0%, 60%, 100% { transform: translateY(0); }
-        30% { transform: translateY(-4px); }
-      }
+      // Input footer
+      R + " .hs-foot{padding:12px 14px;border-top:1px solid #eef0f6;display:flex;gap:8px;align-items:flex-end;flex-shrink:0;background:#fff;margin:0;}",
+      R + " .hs-foot textarea{flex:1;border:1.5px solid #dce1eb;border-radius:20px;padding:9px 16px;font-size:13.5px;resize:none;outline:none;max-height:90px;min-height:38px;font-family:inherit;line-height:1.4;color:#1b2a4e;background:#fafbfd;transition:border-color .15s,background .15s;margin:0;}",
+      R + " .hs-foot textarea:focus{border-color:" + C + ";background:#fff;}",
+      R + " .hs-foot textarea::placeholder{color:#a0aec0;}",
+      R + " .hs-send{width:36px;height:36px;border-radius:50%;border:none;background:" + C + ";color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .15s,transform .1s;margin:0;padding:0;}",
+      R + " .hs-send:disabled{opacity:.35;cursor:default;}",
+      R + " .hs-send:not(:disabled):hover{filter:brightness(1.08);}",
+      R + " .hs-send:not(:disabled):active{transform:scale(.92);}",
+      R + " .hs-send svg{width:16px;height:16px;}",
 
-      /* Input area */
-      .hs-input-area {
-        padding: 12px 16px;
-        border-top: 1px solid #e2e8f0;
-        display: flex;
-        gap: 8px;
-        align-items: flex-end;
-        flex-shrink: 0;
-      }
-      .hs-input-area textarea {
-        flex: 1;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 10px 14px;
-        font-size: 14px;
-        resize: none;
-        outline: none;
-        max-height: 100px;
-        min-height: 40px;
-        font-family: inherit;
-        line-height: 1.4;
-        transition: border-color 0.2s;
-      }
-      .hs-input-area textarea:focus {
-        border-color: ${CONFIG.color};
-      }
-      .hs-input-area textarea::placeholder {
-        color: #94a3b8;
-      }
-      .hs-send-btn {
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        border: none;
-        background: ${CONFIG.color};
-        color: #fff;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        transition: opacity 0.2s;
-      }
-      .hs-send-btn:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
-      .hs-send-btn svg {
-        width: 18px;
-        height: 18px;
-        fill: #fff;
-      }
+      // Powered by
+      R + " .hs-pw{text-align:center;padding:7px 14px;font-size:10.5px;color:#b0b8c9;flex-shrink:0;background:#fafbfd;border-top:1px solid #f0f2f5;margin:0;}",
+      R + " .hs-pw a{color:#8892a6;text-decoration:none;font-weight:500;}",
+      R + " .hs-pw a:hover{color:#6b7a99;}",
 
-      /* Pre-chat form */
-      .hs-prechat {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 32px 24px;
-        gap: 16px;
-      }
-      .hs-prechat-welcome {
-        font-size: 15px;
-        color: #475569;
-        text-align: center;
-      }
-      .hs-prechat input {
-        width: 100%;
-        max-width: 260px;
-        padding: 10px 14px;
-        border: 1px solid #e2e8f0;
-        border-radius: 10px;
-        font-size: 14px;
-        outline: none;
-        font-family: inherit;
-        transition: border-color 0.2s;
-      }
-      .hs-prechat input:focus {
-        border-color: ${CONFIG.color};
-      }
-      .hs-prechat button {
-        padding: 10px 28px;
-        border-radius: 10px;
-        border: none;
-        background: ${CONFIG.color};
-        color: #fff;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: opacity 0.2s;
-        font-family: inherit;
-      }
-      .hs-prechat button:hover {
-        opacity: 0.9;
-      }
-
-      /* Powered by */
-      .hs-powered {
-        text-align: center;
-        padding: 6px;
-        font-size: 11px;
-        color: #94a3b8;
-        flex-shrink: 0;
-      }
-      .hs-powered a {
-        color: #64748b;
-        text-decoration: none;
-      }
-      .hs-powered a:hover {
-        text-decoration: underline;
-      }
-
-      /* Mobile responsive */
-      @media (max-width: 480px) {
-        #heysupport-window {
-          width: calc(100vw - 16px);
-          height: calc(100vh - 80px);
-          max-height: calc(100vh - 80px);
-          bottom: 8px;
-          ${CONFIG.position === "left" ? "left: 8px;" : "right: 8px;"}
-          border-radius: 12px;
-        }
-        #heysupport-bubble {
-          bottom: 16px;
-          ${CONFIG.position === "left" ? "left: 16px;" : "right: 16px;"}
-        }
-      }
-    `;
+      // Mobile
+      "@media(max-width:480px){" + R + " #hs-chat{width:100%;height:100%;max-height:100%;bottom:0;" + pos + ":0;border-radius:0;}" + R + " #hs-launcher{bottom:16px;" + pos + ":16px;width:52px;height:52px;}" + R + " #hs-launcher svg{width:22px;height:22px;}}"
+    ].join("\n");
 
     var style = document.createElement("style");
     style.id = "heysupport-styles";
@@ -427,46 +153,47 @@
   // ── DOM ──────────────────────────────────────────────────────────────
   function buildDOM() {
     var container = document.createElement("div");
-    container.id = "heysupport-widget";
-    container.innerHTML = `
-      <button id="heysupport-bubble" aria-label="Open chat">
-        <svg class="hs-chat-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/><path d="M7 9h10v2H7zm0-3h10v2H7z"/></svg>
-        <svg class="hs-close-icon" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        <span id="heysupport-badge">0</span>
-      </button>
-      <div id="heysupport-window">
-        <div class="hs-header">
-          <div class="hs-header-title">${escapeHtml(CONFIG.title)}</div>
-          <div class="hs-header-subtitle">We typically reply within minutes</div>
-        </div>
-        <div class="hs-status" id="heysupport-status">
-          <span class="hs-status-dot hs-waiting"></span>
-          <span id="heysupport-status-text">Waiting for an operator...</span>
-        </div>
-        <div id="heysupport-body">
-          <div class="hs-prechat" id="heysupport-prechat">
-            <div class="hs-prechat-welcome">${escapeHtml(CONFIG.welcome)}</div>
-            <input type="text" id="heysupport-name-input" placeholder="Your name" autocomplete="name" />
-            <input type="email" id="heysupport-email-input" placeholder="Email (optional)" autocomplete="email" />
-            <button id="heysupport-start-btn">Start Chat</button>
-          </div>
-          <div class="hs-messages" id="heysupport-messages" style="display:none">
-            <div class="hs-typing" id="heysupport-typing">
-              <div class="hs-typing-dot"></div>
-              <div class="hs-typing-dot"></div>
-              <div class="hs-typing-dot"></div>
-            </div>
-          </div>
-        </div>
-        <div class="hs-input-area" id="heysupport-input-area" style="display:none">
-          <textarea id="heysupport-input" placeholder="Type a message..." rows="1"></textarea>
-          <button class="hs-send-btn" id="heysupport-send-btn" disabled aria-label="Send">
-            <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-          </button>
-        </div>
-        <div class="hs-powered">Powered by <a href="https://heysmmprovider.com" target="_blank" rel="noopener">HeySupport</a></div>
-      </div>
-    `;
+    container.id = "hs-root";
+    container.innerHTML = '\
+<button id="hs-launcher" aria-label="Open chat">\
+<svg class="hs-icon-chat" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>\
+<svg class="hs-icon-close" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>\
+<span id="hs-badge">0</span>\
+</button>\
+<div id="hs-chat">\
+<div class="hs-head">\
+<div class="hs-head-title">' + escapeHtml(CONFIG.title) + '</div>\
+<div class="hs-head-sub">We typically reply in a few minutes</div>\
+</div>\
+<div class="hs-bar" id="hs-bar">\
+<span class="hs-dot" id="hs-dot"></span>\
+<span id="hs-bar-text"></span>\
+</div>\
+<div class="hs-body" id="hs-body">\
+<div class="hs-prechat" id="hs-prechat">\
+<div class="hs-prechat-hi">' + escapeHtml(CONFIG.welcome) + '</div>\
+<div class="hs-prechat-group">\
+<label class="hs-prechat-label" for="hs-name">Name</label>\
+<input class="hs-prechat-input" type="text" id="hs-name" placeholder="Your name" autocomplete="name" />\
+</div>\
+<div class="hs-prechat-group">\
+<label class="hs-prechat-label" for="hs-email">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>\
+<input class="hs-prechat-input" type="email" id="hs-email" placeholder="you@email.com" autocomplete="email" />\
+</div>\
+<button class="hs-prechat-btn" id="hs-start">Start Conversation</button>\
+</div>\
+<div class="hs-msgs" id="hs-msgs" style="display:none">\
+<div class="hs-typing" id="hs-typing"><i></i><i></i><i></i></div>\
+</div>\
+</div>\
+<div class="hs-foot" id="hs-foot" style="display:none">\
+<textarea id="hs-input" placeholder="Type your message\u2026" rows="1"></textarea>\
+<button class="hs-send" id="hs-send" disabled aria-label="Send">\
+<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2" fill="#fff" stroke="#fff"/></svg>\
+</button>\
+</div>\
+<div class="hs-pw">Powered by <a href="https://heysmmprovider.com" target="_blank" rel="noopener">HeySupport</a></div>\
+</div>';
     document.body.appendChild(container);
   }
 
@@ -484,86 +211,73 @@
     conversationId: null,
     operatorJoined: false,
     conversationClosed: false,
-    messages: [],
     unread: 0,
   };
 
-  // ── DOM refs (populated after buildDOM) ─────────────────────────────
-  var $bubble,
-    $badge,
-    $window,
-    $status,
-    $statusText,
-    $statusDot,
-    $prechat,
-    $messages,
-    $inputArea,
-    $input,
-    $sendBtn,
-    $nameInput,
-    $emailInput,
-    $startBtn,
-    $typing;
+  var $launcher, $badge, $chat, $bar, $barText, $dot, $prechat, $msgs,
+    $foot, $input, $sendBtn, $nameInput, $emailInput, $startBtn, $typing;
 
   function cacheDom() {
-    $bubble = document.getElementById("heysupport-bubble");
-    $badge = document.getElementById("heysupport-badge");
-    $window = document.getElementById("heysupport-window");
-    $status = document.getElementById("heysupport-status");
-    $statusText = document.getElementById("heysupport-status-text");
-    $statusDot = $status.querySelector(".hs-status-dot");
-    $prechat = document.getElementById("heysupport-prechat");
-    $messages = document.getElementById("heysupport-messages");
-    $inputArea = document.getElementById("heysupport-input-area");
-    $input = document.getElementById("heysupport-input");
-    $sendBtn = document.getElementById("heysupport-send-btn");
-    $nameInput = document.getElementById("heysupport-name-input");
-    $emailInput = document.getElementById("heysupport-email-input");
-    $startBtn = document.getElementById("heysupport-start-btn");
-    $typing = document.getElementById("heysupport-typing");
+    $launcher = document.getElementById("hs-launcher");
+    $badge = document.getElementById("hs-badge");
+    $chat = document.getElementById("hs-chat");
+    $bar = document.getElementById("hs-bar");
+    $barText = document.getElementById("hs-bar-text");
+    $dot = document.getElementById("hs-dot");
+    $prechat = document.getElementById("hs-prechat");
+    $msgs = document.getElementById("hs-msgs");
+    $foot = document.getElementById("hs-foot");
+    $input = document.getElementById("hs-input");
+    $sendBtn = document.getElementById("hs-send");
+    $nameInput = document.getElementById("hs-name");
+    $emailInput = document.getElementById("hs-email");
+    $startBtn = document.getElementById("hs-start");
+    $typing = document.getElementById("hs-typing");
   }
 
-  // ── Toggle widget ───────────────────────────────────────────────────
-  function toggleWidget() {
+  // ── Toggle ──────────────────────────────────────────────────────────
+  function toggle() {
     state.open = !state.open;
-    $bubble.classList.toggle("hs-open", state.open);
-    $window.classList.toggle("hs-open", state.open);
+    $launcher.classList.toggle("hs-active", state.open);
+
     if (state.open) {
+      $chat.classList.add("hs-visible");
+      // Trigger animation on next frame
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          $chat.classList.add("hs-shown");
+        });
+      });
       state.unread = 0;
       updateBadge();
-      if (state.conversationId) {
-        $input.focus();
-      } else {
-        $nameInput.focus();
-      }
+      if (state.conversationId) $input.focus();
+      else $nameInput.focus();
       scrollToBottom();
+    } else {
+      $chat.classList.remove("hs-shown");
+      setTimeout(function () {
+        if (!state.open) $chat.classList.remove("hs-visible");
+      }, 200);
     }
   }
 
   function updateBadge() {
     $badge.textContent = state.unread;
-    $badge.classList.toggle("hs-show", state.unread > 0);
+    $badge.classList.toggle("hs-visible", state.unread > 0);
   }
 
-  // ── Socket.IO loading ───────────────────────────────────────────────
-  function loadSocketIO(callback) {
-    if (window.io) {
-      callback();
-      return;
-    }
-    var script = document.createElement("script");
-    script.src = "https://cdn.socket.io/4.7.5/socket.io.min.js";
-    script.onload = callback;
-    script.onerror = function () {
-      console.error("[HeySupport] Failed to load Socket.IO client.");
-    };
-    document.head.appendChild(script);
+  // ── Socket.IO ───────────────────────────────────────────────────────
+  function loadSocketIO(cb) {
+    if (window.io) return cb();
+    var s = document.createElement("script");
+    s.src = "https://cdn.socket.io/4.7.5/socket.io.min.js";
+    s.onload = cb;
+    s.onerror = function () { console.error("[HeySupport] Failed to load Socket.IO."); };
+    document.head.appendChild(s);
   }
 
-  // ── Connect socket ──────────────────────────────────────────────────
   function connectSocket() {
     if (state.socket) return;
-
     state.socket = io(CONFIG.server, {
       transports: ["websocket", "polling"],
       reconnection: true,
@@ -582,85 +296,60 @@
     });
 
     s.on("registered", function () {
-      // If we have an existing conversation, request history
       if (state.conversationId) {
-        s.emit("conversation:history", {
-          conversationId: state.conversationId,
-        });
+        s.emit("conversation:history", { conversationId: state.conversationId });
       }
     });
 
     s.on("conversation:started", function (data) {
       state.conversationId = data.conversationId || data.id;
-      saveVisitor(
-        Object.assign({}, state.visitor, {
-          conversationId: state.conversationId,
-        })
-      );
+      saveVisitor(Object.assign({}, state.visitor, { conversationId: state.conversationId }));
       showChatUI();
       setStatus("waiting");
     });
 
     s.on("conversation:joined", function (data) {
       state.operatorJoined = true;
-      setStatus("connected");
-      addSystemMessage(
-        (data.operator && data.operator.name
-          ? data.operator.name
-          : "An operator") + " has joined the chat"
-      );
+      setStatus("online");
+      var name = (data.operator && data.operator.name) ? data.operator.name : "An operator";
+      addSystemMessage(name + " joined the conversation");
     });
 
     s.on("conversation:closed", function () {
       state.conversationClosed = true;
       setStatus("closed");
-      addSystemMessage("This conversation has been closed");
+      addSystemMessage("Conversation ended");
       disableInput();
     });
 
     s.on("message:received", function (data) {
       var msg = data.message || data;
       if (msg.senderId === state.visitor.id) return;
-      addMessage(msg, "operator");
-      if (!state.open) {
-        state.unread++;
-        updateBadge();
-      }
+      addMessage(msg, "o");
+      if (!state.open) { state.unread++; updateBadge(); }
     });
 
     s.on("conversation:history", function (data) {
       var msgs = data.messages || data;
-      if (Array.isArray(msgs)) {
-        msgs.forEach(function (msg) {
-          var type = msg.senderId === state.visitor.id ? "visitor" : "operator";
-          addMessage(msg, type, true);
-        });
-        scrollToBottom();
-      }
+      if (!Array.isArray(msgs)) return;
+      msgs.forEach(function (msg) {
+        addMessage(msg, msg.senderId === state.visitor.id ? "v" : "o", true);
+      });
+      scrollToBottom();
     });
 
     s.on("error", function (data) {
-      var errMsg = (data && data.message) || "Something went wrong";
-      addSystemMessage("Error: " + errMsg);
-    });
-
-    s.on("disconnect", function () {
-      // Socket will auto-reconnect
+      addSystemMessage("Error: " + ((data && data.message) || "Something went wrong"));
     });
   }
 
-  // ── Start conversation ──────────────────────────────────────────────
+  // ── Actions ─────────────────────────────────────────────────────────
   function startConversation(name, email) {
     state.visitor.name = name;
     if (email) state.visitor.email = email;
     saveVisitor(state.visitor);
 
-    state.socket.emit("register", {
-      userId: state.visitor.id,
-      name: name,
-      role: "client",
-    });
-
+    state.socket.emit("register", { userId: state.visitor.id, name: name, role: "client" });
     state.socket.emit("conversation:start", {
       name: name,
       email: email || undefined,
@@ -668,98 +357,73 @@
     });
   }
 
-  // ── Send message ────────────────────────────────────────────────────
   function sendMessage() {
     var text = $input.value.trim();
     if (!text || !state.conversationId) return;
-
-    state.socket.emit("message:send", {
-      conversationId: state.conversationId,
+    state.socket.emit("message:send", { conversationId: state.conversationId, text: text });
+    addMessage({
+      id: "l_" + Date.now(),
+      senderId: state.visitor.id,
+      senderName: state.visitor.name,
       text: text,
-    });
-
-    addMessage(
-      {
-        id: "local_" + Date.now(),
-        senderId: state.visitor.id,
-        senderName: state.visitor.name,
-        text: text,
-        timestamp: new Date().toISOString(),
-      },
-      "visitor"
-    );
-
+      timestamp: new Date().toISOString(),
+    }, "v");
     $input.value = "";
-    autoResizeInput();
+    autoResize();
     $sendBtn.disabled = true;
   }
 
   // ── UI helpers ──────────────────────────────────────────────────────
   function showChatUI() {
     $prechat.style.display = "none";
-    $messages.style.display = "flex";
-    $inputArea.style.display = "flex";
+    $msgs.style.display = "flex";
+    $foot.style.display = "flex";
     $input.focus();
   }
 
   function setStatus(type) {
-    $status.classList.add("hs-show");
-    $statusDot.className = "hs-status-dot";
-
+    $bar.classList.add("hs-visible");
+    $dot.className = "hs-dot";
     if (type === "waiting") {
-      $statusDot.classList.add("hs-waiting");
-      $statusText.textContent = "Waiting for an operator...";
-    } else if (type === "connected") {
-      $statusDot.classList.add("hs-connected");
-      $statusText.textContent = "Operator connected";
+      $dot.classList.add("hs-dot-waiting");
+      $barText.textContent = "Waiting for an operator\u2026";
+    } else if (type === "online") {
+      $dot.classList.add("hs-dot-online");
+      $barText.textContent = "Operator connected";
     } else if (type === "closed") {
-      $statusDot.classList.add("hs-closed");
-      $statusText.textContent = "Conversation closed";
+      $dot.classList.add("hs-dot-off");
+      $barText.textContent = "Conversation closed";
     }
   }
 
   function addMessage(msg, type, silent) {
     var el = document.createElement("div");
-    el.className = "hs-msg hs-msg-" + type;
+    el.className = "hs-m hs-m-" + type;
 
-    var senderHtml = "";
-    if (type === "operator" && msg.senderName) {
-      senderHtml =
-        '<div class="hs-msg-sender">' +
-        escapeHtml(msg.senderName) +
-        "</div>";
+    var html = "";
+    if (type === "o" && msg.senderName) {
+      html += '<div class="hs-m-name">' + escapeHtml(msg.senderName) + "</div>";
     }
-
-    var timeStr = "";
+    html += escapeHtml(msg.text);
     if (msg.timestamp) {
       var d = new Date(msg.timestamp);
-      timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      html += '<div class="hs-m-time">' + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) + "</div>";
     }
-
-    el.innerHTML =
-      senderHtml +
-      escapeHtml(msg.text) +
-      (timeStr
-        ? '<div class="hs-msg-time">' + timeStr + "</div>"
-        : "");
-
-    // Insert before typing indicator
-    $messages.insertBefore(el, $typing);
+    el.innerHTML = html;
+    $msgs.insertBefore(el, $typing);
     if (!silent) scrollToBottom();
   }
 
   function addSystemMessage(text) {
     var el = document.createElement("div");
-    el.className = "hs-msg hs-msg-system";
+    el.className = "hs-m hs-m-s";
     el.textContent = text;
-    $messages.insertBefore(el, $typing);
+    $msgs.insertBefore(el, $typing);
     scrollToBottom();
   }
 
   function scrollToBottom() {
-    requestAnimationFrame(function () {
-      $messages.scrollTop = $messages.scrollHeight;
-    });
+    requestAnimationFrame(function () { $msgs.scrollTop = $msgs.scrollHeight; });
   }
 
   function disableInput() {
@@ -768,59 +432,41 @@
     $input.placeholder = "Conversation closed";
   }
 
-  function autoResizeInput() {
+  function autoResize() {
     $input.style.height = "auto";
-    $input.style.height = Math.min($input.scrollHeight, 100) + "px";
+    $input.style.height = Math.min($input.scrollHeight, 90) + "px";
   }
 
-  // ── Event listeners ─────────────────────────────────────────────────
+  // ── Events ──────────────────────────────────────────────────────────
   function bindEvents() {
-    $bubble.addEventListener("click", toggleWidget);
+    $launcher.addEventListener("click", toggle);
 
     $startBtn.addEventListener("click", function () {
       var name = $nameInput.value.trim();
       if (!name) {
-        $nameInput.style.borderColor = "#ef4444";
+        $nameInput.classList.add("hs-err");
         $nameInput.focus();
         return;
       }
-      $nameInput.style.borderColor = "";
+      $nameInput.classList.remove("hs-err");
       startConversation(name, $emailInput.value.trim());
     });
 
-    $nameInput.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        $startBtn.click();
-      }
-    });
-
-    $emailInput.addEventListener("keydown", function (e) {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        $startBtn.click();
-      }
-    });
+    $nameInput.addEventListener("input", function () { $nameInput.classList.remove("hs-err"); });
+    $nameInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); $startBtn.click(); } });
+    $emailInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); $startBtn.click(); } });
 
     $input.addEventListener("input", function () {
       $sendBtn.disabled = !$input.value.trim();
-      autoResizeInput();
+      autoResize();
     });
-
     $input.addEventListener("keydown", function (e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     });
-
     $sendBtn.addEventListener("click", sendMessage);
 
-    // Close on Escape
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape" && state.open) {
-        toggleWidget();
-      }
+      if (e.key === "Escape" && state.open) toggle();
     });
   }
 
@@ -831,27 +477,17 @@
     cacheDom();
     bindEvents();
 
-    // Load or create visitor
     var visitor = getVisitor();
     if (!visitor) {
       visitor = { id: generateId(), name: "", email: "" };
       saveVisitor(visitor);
     }
     state.visitor = visitor;
+    if (visitor.name) $nameInput.value = visitor.name;
+    if (visitor.email) $emailInput.value = visitor.email;
 
-    // Pre-fill name if returning visitor
-    if (visitor.name) {
-      $nameInput.value = visitor.name;
-    }
-    if (visitor.email) {
-      $emailInput.value = visitor.email;
-    }
-
-    // Load Socket.IO then connect
     loadSocketIO(function () {
       connectSocket();
-
-      // If returning visitor had an active conversation, restore chat UI
       if (visitor.conversationId) {
         state.conversationId = visitor.conversationId;
         showChatUI();
@@ -860,7 +496,6 @@
     });
   }
 
-  // Wait for DOM ready
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
   } else {
