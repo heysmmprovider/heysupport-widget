@@ -1,0 +1,29 @@
+{
+  "name": "heysupport-widget",
+  "version": "1.0.0",
+  "description": "Lightweight embeddable live chat widget for HeySupport",
+  "main": "dist/heysupport.js",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node build.js --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/heysmmprovider/heysupport.git"
+  },
+  "keywords": [
+    "chat",
+    "widget",
+    "live-chat",
+    "customer-support",
+    "heysupport",
+    "socket.io"
+  ],
+  "author": "HeySupport",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/heysmmprovider/heysupport/issues"
+  },
+  "homepage": "https://github.com/heysmmprovider/heysupport#readme",
+  "devDependencies": {}
+}
